@@ -7,11 +7,11 @@ import time, datetime
 import pandas as pd
 import pathlib
 
-pathlib.Path('Processed_Result').mkdir(parents=True, exist_ok=True)
-pathlib.Path('Uploaded_Faces').mkdir(parents=True, exist_ok=True)
-pathlib.Path('Uploaded_Unknown_Faces').mkdir(parents=True, exist_ok=True)
+pathlib.Path('/Processed_Result').mkdir(parents=True, exist_ok=True)
+pathlib.Path('/Uploaded_Faces').mkdir(parents=True, exist_ok=True)
+pathlib.Path('/Uploaded_Unknown_Faces').mkdir(parents=True, exist_ok=True)
 
-connection = sqlite3.connect("face_recognition.db")
+connection = sqlite3.connect("/face_recognition.db")
 cursor = connection.cursor()
 # apt-get install build-essential cmake pkg-config
 # apt-get install libx11-dev libatlas-base-dev
@@ -54,7 +54,7 @@ atte_table_sql = '''CREATE TABLE IF NOT EXISTS FACE_ATTENDANCE
 cursor.execute(atte_table_sql)
 connection.commit()
 
-av_ids = os.listdir('./Uploaded_Faces')
+av_ids = os.listdir('/Uploaded_Faces')
 
 def run():
     activities = ["Face Data Upload", "Face Recognition", "Admin"]
@@ -77,8 +77,8 @@ def run():
                 cursor.execute(insert_sql, data_val)
                 connection.commit()
 
-                os.mkdir('./Uploaded_Faces/' + str(unique_id))
-                save_image_path = './Uploaded_Faces/' + str(unique_id) + '/' + img_file.name
+                os.mkdir('/Uploaded_Faces/' + str(unique_id))
+                save_image_path = '/Uploaded_Faces/' + str(unique_id) + '/' + img_file.name
                 with open(save_image_path, "wb") as f:
                     f.write(img_file.getbuffer())
                 user_img = Image.open(save_image_path)
@@ -97,12 +97,12 @@ def run():
                     unsafe_allow_html=True)
         reco_img_file = st.file_uploader("Choose an Image", type=['jpg', 'png'])
         if reco_img_file is not None:
-            save_image_path = './Uploaded_Unknown_Faces/' + reco_img_file.name
+            save_image_path = '/Uploaded_Unknown_Faces/' + reco_img_file.name
             with open(save_image_path, "wb") as f:
                 f.write(reco_img_file.getbuffer())
             found_faces, found_ids = Recognise_Face(save_image_path)
             print(found_faces, found_ids)
-            user_img = Image.open('./Processed_Result/result.jpg')
+            user_img = Image.open('/Processed_Result/result.jpg')
             user_img = user_img.resize((350, 350))
             st.image(user_img)
             pc = 1
@@ -144,8 +144,8 @@ def run():
                     with col1:
                         st.subheader("({}) Name: {}".format(count,find_data[1]))
                         st.write("Unique ID is: {}".format(av_ids[i]))
-                        for image in os.listdir('./Uploaded_Faces/'+str(av_ids[i])):
-                            img = Image.open('./Uploaded_Faces/'+str(av_ids[i])+'/'+image)
+                        for image in os.listdir('/Uploaded_Faces/'+str(av_ids[i])):
+                            img = Image.open('/Uploaded_Faces/'+str(av_ids[i])+'/'+image)
                             img = img.resize((125,125))
                             st.image(img)
                         count+=1

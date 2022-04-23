@@ -4,13 +4,13 @@ import cv2
 import sqlite3
 print(os.getcwd())
 
-KNOWN_FACES_DIR = 'Uploaded_Faces'
+KNOWN_FACES_DIR = '/Uploaded_Faces'
 TOLERANCE = 0.5
 FRAME_THICKNESS = 3
 FONT_THICKNESS = 2
 MODEL = 'cnn'  # default: 'hog', other one can be 'cnn' - CUDA accelerated (if available) deep-learning pretrained model
 
-connection = sqlite3.connect("face_recognition.db")
+connection = sqlite3.connect("/face_recognition.db")
 cursor = connection.cursor()
 
 
@@ -105,7 +105,7 @@ def Recognise_Face(face_image):
 
     # Show image
     # cv2.imshow(filename, image)
-    cv2.imwrite('./Processed_Result/result.jpg', image)
+    cv2.imwrite('/Processed_Result/result.jpg', image)
     return found_faces, found_ids
     # cv2.waitKey(0)
     # cv2.destroyWindow(filename)
