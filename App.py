@@ -5,6 +5,11 @@ from Face_Recognition import Recognise_Face
 import sqlite3
 import time, datetime
 import pandas as pd
+import pathlib
+
+pathlib.Path('./Processed_Result').mkdir(parents=True, exist_ok=True)
+pathlib.Path('./Uploaded_Faces').mkdir(parents=True, exist_ok=True)
+pathlib.Path('./Uploaded_Faces').mkdir(parents=True, exist_ok=True)
 
 connection = sqlite3.connect("face_recognition.db")
 cursor = connection.cursor()
