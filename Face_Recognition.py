@@ -2,6 +2,7 @@ import face_recognition
 import os
 import cv2
 import sqlite3
+print(os.getcwd())
 
 KNOWN_FACES_DIR = 'Uploaded_Faces'
 TOLERANCE = 0.5
