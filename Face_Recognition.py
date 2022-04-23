@@ -10,7 +10,7 @@ FRAME_THICKNESS = 3
 FONT_THICKNESS = 2
 MODEL = 'cnn'  # default: 'hog', other one can be 'cnn' - CUDA accelerated (if available) deep-learning pretrained model
 
-connection = sqlite3.connect("/face_recognition.db")
+connection = sqlite3.connect("face_recognition.db")
 cursor = connection.cursor()
 
 

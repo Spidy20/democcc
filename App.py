@@ -11,7 +11,7 @@ pathlib.Path('/Processed_Result').mkdir(parents=True, exist_ok=True)
 pathlib.Path('/Uploaded_Faces').mkdir(parents=True, exist_ok=True)
 pathlib.Path('/Uploaded_Unknown_Faces').mkdir(parents=True, exist_ok=True)
 
-connection = sqlite3.connect("/face_recognition.db")
+connection = sqlite3.connect("face_recognition.db")
 cursor = connection.cursor()
 # apt-get install build-essential cmake pkg-config
 # apt-get install libx11-dev libatlas-base-dev
