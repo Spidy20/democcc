@@ -4,4 +4,4 @@ cmake
 dlib
 face-recognition
 Pillow
-opencv-contrib-python
+opencv-python-headless==4.2.0.32

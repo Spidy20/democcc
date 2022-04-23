@@ -8,6 +8,9 @@ import pandas as pd
 
 connection = sqlite3.connect("face_recognition.db")
 cursor = connection.cursor()
+# apt-get install build-essential cmake pkg-config
+# apt-get install libx11-dev libatlas-base-dev
+# apt-get install libgtk-3-dev libboost-python-dev
 
 # Create Data store table
 data_table_sql = '''CREATE TABLE IF NOT EXISTS REGISTERED_FACES
