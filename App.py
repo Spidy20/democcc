@@ -1,7 +1,7 @@
 import streamlit as st
 import os
 from PIL import Image
-from Face_Recognition import Recognise_Face
+
 import sqlite3
 import time, datetime
 import pandas as pd
@@ -100,6 +100,7 @@ def run():
             save_image_path = '/Uploaded_Unknown_Faces/' + reco_img_file.name
             with open(save_image_path, "wb") as f:
                 f.write(reco_img_file.getbuffer())
+            from Face_Recognition import Recognise_Face
             found_faces, found_ids = Recognise_Face(save_image_path)
             print(found_faces, found_ids)
             user_img = Image.open('/Processed_Result/result.jpg')
