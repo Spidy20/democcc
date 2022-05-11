@@ -1,19 +1,40 @@
 import streamlit as st
 import os
 from PIL import Image
-from Face_Recognition import Recognise_Face
 import sqlite3
 import time, datetime
 import pandas as pd
 import base64, shutil
 from io import BytesIO
 from pathlib import Path
+import face_recognition
+import cv2
 
+# Create necessary directories
 Path("./Processed_Result").mkdir(exist_ok=True)
 Path("./Uploaded_Unknown_Faces").mkdir(exist_ok=True)
 Path("./Uploaded_Faces").mkdir(exist_ok=True)
 
+# Making a connection with database
+connection = sqlite3.connect("face_recognition.db")
+cursor = connection.cursor()
 
+KNOWN_FACES_DIR = 'Uploaded_Faces'
+TOLERANCE = 0.5
+FRAME_THICKNESS = 3
+FONT_THICKNESS = 2
+MODEL = 'cnn'  # default: 'hog', other one can be 'cnn' - CUDA accelerated (if available) deep-learning pretrained model
+
+
+# Returns (R, G, B) from name
+def name_to_color(name):
+    # Take 3 first letters, tolower()
+    # lowercased character ord() value rage is 97 to 122, substract 97, multiply by 8
+    color = [(ord(c.lower()) - 97) * 8 for c in name[:3]]
+    return color
+
+
+# Remove dir or files
 def remove_file_or_dir(path: str) -> None:
     """ Remove a file or directory """
     try:
@@ -22,8 +43,94 @@ def remove_file_or_dir(path: str) -> None:
         os.remove(path)
 
 
-connection = sqlite3.connect("face_recognition.db")
-cursor = connection.cursor()
+# Storing Face & Name
+known_faces = []
+known_names = []
+attendance = []
+
+
+# Now let's loop over a folder of faces we want to label
+def Recognise_Face(face_image):
+    for name in os.listdir(KNOWN_FACES_DIR):
+
+        # Next we load every file of faces of known person
+        for filename in os.listdir(f'{KNOWN_FACES_DIR}/{name}'):
+            # Load an image
+            image = face_recognition.load_image_file(f'{KNOWN_FACES_DIR}/{name}/{filename}')
+
+            # Get 128-dimension face encoding
+            # Always returns a list of found faces, for this purpose we take first face only (assuming one face per image as you can't be twice on one image)
+            encoding = face_recognition.face_encodings(image)[0]
+
+            # Append encodings and name
+            known_faces.append(encoding)
+            known_names.append(name)
+
+    print("Status: Recognising....")
+    found_faces = []
+    found_ids = []
+    # Load image
+    image = face_recognition.load_image_file(face_image)
+
+    # This time we first grab face locations - we'll need them to draw boxes
+    locations = face_recognition.face_locations(image, model=MODEL)
+    encodings = face_recognition.face_encodings(image, locations)
+    image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+
+    # But this time we assume that there might be more faces in an image - we can find faces of dirrerent people
+    for face_encoding, face_location in zip(encodings, locations):
+        print("Status: Find Face Encodings....")
+
+        # Returns array of True/False values in order of passed known_faces
+        results = face_recognition.compare_faces(known_faces, face_encoding, TOLERANCE)
+
+        # Since order is being preserved, we check if any face was found then grab index
+
+        match = None
+        if True in results:
+
+            # If at least one is true, get a name of first of found labels
+            match = known_names[results.index(True)]
+            if match not in found_ids:
+                # Each location contains positions in order: top, right, bottom, left
+                top_left = (face_location[3], face_location[0])
+                bottom_right = (face_location[1], face_location[2])
+
+                # Found name of ID from the database
+                found_ids.append(match)
+                find_query = "select * from REGISTERED_FACES where ID=" + str(match) + ';'
+                cursor.execute(find_query)
+                find_data = list(cursor.fetchall()[0])
+
+                # Giving the random color
+                color = name_to_color(find_data[1])
+
+                # Paint frame
+                cv2.rectangle(image, top_left, bottom_right, color, FRAME_THICKNESS)
+
+                # Now we need smaller, filled grame below for a name
+                # This time we use bottom in both corners - to start from bottom and move 50 pixels down
+                top_left = (face_location[3], face_location[2])
+                bottom_right = (face_location[1], face_location[2] + 22)
+
+                # Paint frame
+                found_faces = set(found_faces)
+                found_ids = set(found_ids)
+                found_faces = list(found_faces)
+                found_ids = list(found_ids)
+
+                cv2.rectangle(image, top_left, bottom_right, color, cv2.FILLED)
+                cv2.putText(image, find_data[1], (face_location[3] + 10, face_location[2] + 15),
+                            cv2.FONT_HERSHEY_SIMPLEX,
+                            0.5,
+                            (200, 200, 200), FONT_THICKNESS)
+                found_faces.append(find_data[1])
+                print("Status: Recognising {}....".format(find_data[1]))
+
+    # Writing the result
+    cv2.imwrite('./Processed_Result/result.jpg', image)
+    return found_faces, found_ids
+
 
 # Create Data store table
 data_table_sql = '''CREATE TABLE IF NOT EXISTS REGISTERED_FACES
@@ -35,6 +142,17 @@ cursor.execute(data_table_sql)
 connection.commit()
 
 
+# To get data from the database
+def find_all_data(column):
+    find_query = "select " + column + " from REGISTERED_FACES;"
+    cursor.execute(find_query)
+    find_d = list(cursor.fetchall())
+    all_name = []
+    for i in find_d:
+        all_name.append(i[0])
+    return all_name
+
+
 # Generate download link
 def get_image_download_link(img, filename, text):
     buffered = BytesIO()
@@ -44,8 +162,8 @@ def get_image_download_link(img, filename, text):
     return href
 
 
-# To download the attendance in CSV
-def get_table_download_link(df, filename, text):
+# Generate Attendance CSV
+def get_table_download_link(df,filename,text):
     """Generates a link allowing the data in a given panda dataframe to be downloaded
     in:  dataframe
     out: href string
@@ -57,23 +175,6 @@ def get_table_download_link(df, filename, text):
     return href
 
 
-# To Store the attendance
-# ts = time.time()
-# Date = datetime.datetime.fromtimestamp(ts).strftime('%Y_%m_%d')
-# timeStamp = datetime.datetime.fromtimestamp(ts).strftime('%H:%M:%S')
-# Time = datetime.datetime.fromtimestamp(ts).strftime('%H:%M:%S')
-# Hour, Minute, Second = timeStamp.split(":")
-# att_table_name = str('attendance' + "_" + Date + "_Time_" + Hour + "_" + Minute + "_" + Second)
-#
-# atte_table_sql = "CREATE TABLE IF NOT EXISTS " + att_table_name + \
-#                  '''(ID INT NOT NULL AUTOINCREMENT,
-#                     Uploaded_image VARCHAR(50) NOT NULL,
-#                     User_ID varchar(15) NOT NULL,
-#                     Name varchar(50) NOT NULL,
-#                     Latitude varchar(30) NOT NULL,
-#                     Longitude varchar(40) NOT NULL,
-#                     Timestamp VARCHAR(50) NOT NULL,
-#                     PRIMARY KEY (ID));'''
 atte_table_sql = '''CREATE TABLE IF NOT EXISTS FACE_ATTENDANCE
                     (ID INTEGER PRIMARY KEY NOT NULL,
                     Uploaded_image VARCHAR(50) NOT NULL,
@@ -133,10 +234,15 @@ def run():
             with open(save_image_path, "wb") as f:
                 f.write(reco_img_file.getbuffer())
             found_faces, found_ids = Recognise_Face(save_image_path)
+            print(found_faces, found_ids)
             if found_faces:
                 user_img = Image.open('./Processed_Result/result.jpg')
                 user_img = user_img.resize((350, 350))
                 st.image(user_img)
+                # Download Result
+                result = Image.open('./Processed_Result/result.jpg')
+                st.markdown(get_image_download_link(result, reco_img_file.name, 'Download Result'),
+                            unsafe_allow_html=True)
                 pc = 1
                 # Data insert
                 insert_sql = """insert into FACE_ATTENDANCE values (null,?,?,?,?,?,?)"""
@@ -145,17 +251,37 @@ def run():
                 cur_date = datetime.datetime.fromtimestamp(ts).strftime('%Y-%m-%d')
                 cur_time = datetime.datetime.fromtimestamp(ts).strftime('%H:%M:%S')
                 timestamp = str(cur_date + '_' + cur_time)
-                for i in range(len(found_faces)):
-                    st.write(pc, "{} found in this Image".format(found_faces[i]))
-                    data_val = (reco_img_file.name, str(found_ids[i]), found_faces[i], '23', '72', timestamp)
-                    cursor.execute(insert_sql, data_val)
-                    pc += 1
-                result = Image.open('./Processed_Result/result.jpg')
-                st.markdown(get_image_download_link(result, reco_img_file.name, 'Download Result'),
-                            unsafe_allow_html=True)
+                # for i in range(len(found_faces)):
+                #     st.write(pc, "{} found in this Image".format(found_faces[i]))
+                #     data_val = (reco_img_file.name, str(found_ids[i]), found_faces[i], '23', '72', timestamp)
+                #     cursor.execute(insert_sql, data_val)
+                #     pc += 1
+                all_names = find_all_data('Name')
+                all_ids = find_all_data('ID')
+                present_count = 0
+                for i in range(len(all_names)):
+                    tmp = [all_ids[i], all_names[i], '23', '72']
+                    if all_ids[i] in found_ids:
+                        tmp.append('Present')
+                        tmp.append(timestamp)
+                        tmp.append(reco_img_file.name)
+                        present_count+=1
+                    else:
+                        tmp.append("Absent")
+                        tmp.append('')
+                        tmp.append('')
+                    attendance.append(tmp)
+                full_attendance = pd.DataFrame(attendance,columns=['Unique ID','Name', 'Latitude', 'Longitude', 'Status', 'Timestamp','Uploaded Image'])
+                st.subheader("✅ Attendance Report")
+                att_percentage = present_count * 100 // len(all_names)
+                st.success("Total: {} Students, Present: {}".format(len(all_names),present_count))
+                st.info("Total Attendance is: {}%".format(att_percentage))
+                st.subheader("Full Attendance📝")
+                st.dataframe(full_attendance)
+                st.markdown(get_table_download_link(full_attendance,'Attendance_{}.csv'.format(timestamp) ,'Download Attendance'), unsafe_allow_html=True)
                 connection.commit()
             else:
-                st.info("No Recognise Faces found, please refresh the page....")
+                st.info("No Recognise Faces found, please give your face data or regresh the page.")
     elif choice == activities[2]:
         st.title("Welcome to the Admin Side")
         st.markdown(
@@ -184,17 +310,17 @@ def run():
                             img = img.resize((125, 125))
                             st.image(img)
                         count += 1
-                cursor.execute("select * from FACE_ATTENDANCE;")
-                full_data = cursor.fetchall()
-                st.subheader("**User's Attendance**")
-                df = pd.DataFrame(full_data,
-                                  columns=['ID', 'Image Name', 'Face ID', 'Name', 'Longitude', 'Latitude', 'Timestamp'])
-                if df.empty:
-                    pass
-                else:
-                    st.dataframe(df)
-                    st.markdown(get_table_download_link(df,'Attendance.csv', 'Download Attendance'), unsafe_allow_html=True)
-
+                # cursor.execute("select * from FACE_ATTENDANCE;")
+                # full_data = cursor.fetchall()
+                # st.subheader("**User's Attendance**")
+                # df = pd.DataFrame(full_data,
+                #                   columns=['ID', 'Image Name', 'Face ID', 'Name', 'Longitude', 'Latitude', 'Timestamp'])
+                # if df.empty:
+                #     pass
+                # else:
+                #     st.dataframe(df)
+                #     st.markdown(get_table_download_link(df, 'Attendance.csv', 'Download Attendance'),
+                #                 unsafe_allow_html=True)
             else:
                 st.error("Wrong ID & Password Provided")
         st.warning("Reset system will delete all the stored data of faces & Attendance")
@@ -214,4 +340,6 @@ def run():
                 st.error("Error: can't able to reset system.")
 
     connection.close()
+
+
 run()
