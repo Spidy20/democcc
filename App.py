@@ -14,7 +14,7 @@ import cv2
 Path("./Processed_Result").mkdir(exist_ok=True)
 Path("./Uploaded_Unknown_Faces").mkdir(exist_ok=True)
 Path("./Uploaded_Faces").mkdir(exist_ok=True)
-
+Path("./Tmp_Faces").mkdir(exist_ok=True)
 # Making a connection with database
 connection = sqlite3.connect("face_recognition.db")
 cursor = connection.cursor()
@@ -202,24 +202,30 @@ def run():
         user_name = st.text_input("Enter your Name")
         img_file = st.file_uploader("Choose an Image", type=['jpg', 'png'])
         if st.button("Upload") and unique_id != '' and user_name != '' and img_file is not None:
-
-            if str(unique_id) not in av_ids:
-                ## Data insert
-                insert_sql = """insert into REGISTERED_FACES values (?,?)"""
-                data_val = (str(unique_id), user_name)
-                cursor.execute(insert_sql, data_val)
-                connection.commit()
-
-                os.mkdir('./Uploaded_Faces/' + str(unique_id))
-                save_image_path = './Uploaded_Faces/' + str(unique_id) + '/' + img_file.name
-                with open(save_image_path, "wb") as f:
-                    f.write(img_file.getbuffer())
-                user_img = Image.open(save_image_path)
-                user_img = user_img.resize((250, 250))
-                st.image(user_img)
-                st.success("Successfully Data uploaded for the {}".format(user_name))
+            with open('./Tmp_Faces/'+img_file.name, "wb") as f:
+                f.write(img_file.getbuffer())
+            found_f, found_i = Recognise_Face('./Tmp_Faces/'+img_file.name)
+            if found_f:
+                st.error("Failure !! This Face is matching with the {}({}).".format(found_f[0],found_i[0]))
+                os.remove('./Tmp_Faces/' + img_file.name)
             else:
-                st.error("{} is already exists".format(unique_id))
+                if str(unique_id) not in av_ids:
+                    # Data insert
+                    insert_sql = """insert into REGISTERED_FACES values (?,?)"""
+                    data_val = (str(unique_id), user_name)
+                    cursor.execute(insert_sql, data_val)
+                    connection.commit()
+
+                    os.mkdir('./Uploaded_Faces/' + str(unique_id))
+                    save_image_path = './Uploaded_Faces/' + str(unique_id) + '/' + img_file.name
+                    with open(save_image_path, "wb") as f:
+                        f.write(img_file.getbuffer())
+                    user_img = Image.open(save_image_path)
+                    user_img = user_img.resize((250, 250))
+                    st.image(user_img)
+                    st.success("Successfully Data uploaded for the {}".format(user_name))
+                else:
+                    st.error("{} is already exists".format(unique_id))
         else:
             st.warning("Please fill required details!!")
 
@@ -330,6 +336,7 @@ def run():
                     remove_file_or_dir('Processed_Result')
                     remove_file_or_dir('Uploaded_Faces')
                     remove_file_or_dir('Uploaded_Unknown_Faces')
+                    remove_file_or_dir('Tmp_Faces')
                     remove_file_or_dir('face_recognition.db')
                     st.success("Successfully Reset!")
                     st.info("Please refresh the page to get in working.")
